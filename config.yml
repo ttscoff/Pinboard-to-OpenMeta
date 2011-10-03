@@ -1,0 +1,13 @@
+--- 
+create_thumbs: true
+always_tag: pinboard
+pdf_location: /Users/ttscoff/Dropbox/Sync/WebPDF
+db_location: /Users/ttscoff/Dropbox/Sync/Bookmark
+gzip_db: false
+pdf_tag: pdfit
+update_tags_db: true
+debug: false
+target: /Users/ttscoff/Dropbox/Sync/Bookmark
+password: pinboardpass
+user: pinboarduser
+tag_method: 1

@@ -94,7 +94,7 @@ GAMEOVER
   exit
 end
 
-%w[fileutils ftools set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
+%w[fileutils set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
   require filename
 end
 
@@ -707,7 +707,9 @@ if ARGV[0] == '-r'
   end
   exit
 end
+
 update = pb.needs_update?
+# update = true
 if update
   message = "Found #{new_bookmarks.count} unindexed bookmarks"
   message += ". Exiting." if new_bookmarks.count == 0
@@ -719,7 +721,7 @@ exit if new_bookmarks.count == 0 || !update
 counter = 0
 if $conf['update_tags_db']
   tags_db = File.join("#{ENV['HOME']}/Library/Application Support/Tags/Bookmarks.plist")
-  File.copy(tags_db,tags_db+'.bak')
+  # File.copy(tags_db,tags_db+'.bak')
   plist = Plist::parse_xml(tags_db)
 end
 new_bookmarks.each {|bookmark|
