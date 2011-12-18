@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/usr/bin/ruby
 ##############################################################################
 ### getpinboard.rb by Brett Terpstra, 2011 <http://brettterpstra.com>
 ### Retrieves Pinboard.in bookmarks, saves as local .webloc files for
@@ -94,7 +94,7 @@ GAMEOVER
   exit
 end
 
-%w[fileutils ftools set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
+%w[ftools fileutils set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
   require filename
 end
 
