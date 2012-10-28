@@ -5,10 +5,10 @@
 ### Spotlight searching.
 ###
 ### Optionally adds OpenMeta tags and/or saves page as PDF (see config below)
-### Use -r [NUMBER OF DAYS] to reset the "last_checked" timestamp (primarily 
+### Use -r [NUMBER OF DAYS] to reset the "last_checked" timestamp (primarily
 ### for debugging).
 ###
-### This script is released to the public, modify at will but please leave 
+### This script is released to the public, modify at will but please leave
 ### credit
 ##############################################################################
 
@@ -44,10 +44,15 @@ else
     default_tagger = 0
   end
   comments = <<-GAMEOVER
---- 
+---
+token: pinboardtoken
+# (string) Pinboard API token; if set, takes precedence over user/password settings below
+# set to '' to use username and password settings instead
+# more info: http://blog.pinboard.in/2012/07/api_authentication_tokens/
+#
 user: pinboarduser
 password: pinboardpass
-# (string) Pinboard user and password
+# (string) Pinboard user and password, if you prefer not to use 'token' setting above
 #
 dateformat: US
 # (string) US (12-31-2011) or UK (31-12-2011)
@@ -83,8 +88,8 @@ debug: false
 gzip_db: false
 # (true/false) Saves some space, if you really need it
 GAMEOVER
-               
-  File.open(configfile, 'w') {|f| 
+
+  File.open(configfile, 'w') {|f|
     f.puts(comments)
   }
   editor = pick_editor
@@ -559,7 +564,7 @@ end
 class Utils
   # escape text for use in an AppleScript string
   def e_as(str)
-  	str.to_s.gsub(/(?=["\\])/, '\\')
+    str.to_s.gsub(/(?=["\\])/, '\\')
   end
   # use Growl to display messages
   # checks for existence of growlnotify
@@ -586,7 +591,7 @@ class Utils
 end
 
 class Pinboard
-  attr_accessor :user, :pass, :existing_bookmarks, :new_bookmarks
+  attr_accessor :user, :pass, :token, :existing_bookmarks, :new_bookmarks
   def initialize
     # Make storage directory if needed
     FileUtils.mkdir_p($conf['db_location'],:mode => 0755) unless File.exists? $conf['db_location']
@@ -619,9 +624,10 @@ class Pinboard
     end
   end
   # Set up credentials for Pinboard.in
-  def set_auth(user,pass)
+  def set_auth(user,pass,token)
     @user = user
     @pass = pass
+    @token = token
   end
 
   def new_bookmarks
@@ -649,13 +655,18 @@ class Pinboard
   def get_xml(api_call)
     xml = ''
     http = Net::HTTP.new('api.pinboard.in', 443)
+    unless @token.empty?
+      api_call += '?auth_token=' + @token
+    end
     http.use_ssl = true
     http.start do |http|
-    	request = Net::HTTP::Get.new(api_call)
-    	request.basic_auth @user,@pass
-    	response = http.request(request)
-    	response.value
-    	xml = response.body
+      request = Net::HTTP::Get.new(api_call)
+      if @token.empty?
+        request.basic_auth @user,@pass
+      end
+      response = http.request(request)
+      response.value
+      xml = response.body
     end
     return REXML::Document.new(xml)
   end
@@ -694,7 +705,7 @@ end
 pb = Pinboard.new
 util = Utils.new
 
-pb.set_auth($conf['user'], $conf['password'])
+pb.set_auth($conf['user'], $conf['password'], $conf['token'])
 new_bookmarks = pb.new_bookmarks
 if ARGV[0] == '-r'
   if ARGV[1] =~ /^\d+$/
@@ -754,17 +765,17 @@ new_bookmarks.each {|bookmark|
               do shell script "/usr/local/bin/setWeblocThumb " & quoted form of (POSIX path of (webloc as string))
             end if
             if {"#{tags_app_tags}"} contains "#{$conf['pdf_tag']}" and "#{$conf['pdf_tag']}" is not "false" then
-            	tell application "Paparazzi!"
-            		launch hidden
-            		set minsize to {1024, 768}
-            		capture "#{url}" min size minsize
-            		repeat while busy
-            			-- To wait until the page is loaded.
-            		end repeat
-            		save as PDF in POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf"
-            		quit
-            	end tell
-            	if #{$conf['tag_method']} > 0 then
+              tell application "Paparazzi!"
+                launch hidden
+                set minsize to {1024, 768}
+                capture "#{url}" min size minsize
+                repeat while busy
+                  -- To wait until the page is loaded.
+                end repeat
+                save as PDF in POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf"
+                quit
+              end tell
+              if #{$conf['tag_method']} > 0 then
                 if #{$conf['tag_method']} = 1 then
                   #{tagscommand} {(POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf")}
                 else if #{$conf['tag_method']} = 2 and exists (POSIX file "/usr/local/bin/openmeta") then
@@ -782,13 +793,13 @@ new_bookmarks.each {|bookmark|
         plist[url] = {"title"=>title, "tags"=>tags, "filename"=>cleantitle+'.webloc'} if $conf['update_tags_db'] && !plist.nil?
         counter += 1
       end
-    end  
+    end
   else
     util.debug_msg("File exists: "+cleantitle,false)
     bookmark['local_path'] = $conf['target']+'/'+cleantitle+'.webloc'
     pb.existing_bookmarks.push(bookmark)
   end
-  
+
   File.open(tags_db, 'w'){ |io| io << plist.to_plist } if $conf['update_tags_db'] && !plist.nil?
   pb.store
 }

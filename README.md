@@ -21,8 +21,11 @@ When you run the script the first time (do it from the command line with `/path/
 
 #### Configuration options
 
+token (string)
+: Pinboard API token; if set, takes precedence over user/password settings below
+
 user and password (string)
-: Set these to your Pinboard credentials
+: Set these to your Pinboard credentials if you prefer not to use 'token' setting above
 
 dateformat (string)
 : Leave this as 'US' if your local date format is `mm-dd-yyyy`. Set it to 'UK' if your date format is `dd-mm-yyyy`.
