@@ -5,10 +5,10 @@
 ### Spotlight searching.
 ###
 ### Optionally adds OpenMeta tags and/or saves page as PDF (see config below)
-### Use -r [NUMBER OF DAYS] to reset the "last_checked" timestamp (primarily 
+### Use -r [NUMBER OF DAYS] to reset the "last_checked" timestamp (primarily
 ### for debugging).
 ###
-### This script is released to the public, modify at will but please leave 
+### This script is released to the public, modify at will but please leave
 ### credit
 ##############################################################################
 
@@ -44,7 +44,7 @@ else
     default_tagger = 0
   end
   comments = <<-GAMEOVER
---- 
+---
 user: pinboarduser
 password: pinboardpass
 # (string) Pinboard user and password
@@ -83,8 +83,8 @@ debug: false
 gzip_db: false
 # (true/false) Saves some space, if you really need it
 GAMEOVER
-               
-  File.open(configfile, 'w') {|f| 
+
+  File.open(configfile, 'w') {|f|
     f.puts(comments)
   }
   editor = pick_editor
@@ -747,7 +747,7 @@ new_bookmarks.each {|bookmark|
               if #{$conf['tag_method']} = 1 then
                 #{tagscommand} {POSIX path of (webloc as string)}
               else if #{$conf['tag_method']} = 2 and exists (POSIX file "/usr/local/bin/openmeta") then
-                do shell script "/usr/local/bin/openmeta -p '" & POSIX path of (webloc as string) & "' -a #{om_tags}"
+                do shell script "/usr/local/bin/openmeta -p " & quoted form of (POSIX path of (webloc as string)) & " -a #{om_tags}"
               end if
             end if
             if "#{$conf['create_thumbs']}" = "true" and exists (POSIX file "/usr/local/bin/setWeblocThumb") then
@@ -782,13 +782,13 @@ new_bookmarks.each {|bookmark|
         plist[url] = {"title"=>title, "tags"=>tags, "filename"=>cleantitle+'.webloc'} if $conf['update_tags_db'] && !plist.nil?
         counter += 1
       end
-    end  
+    end
   else
     util.debug_msg("File exists: "+cleantitle,false)
     bookmark['local_path'] = $conf['target']+'/'+cleantitle+'.webloc'
     pb.existing_bookmarks.push(bookmark)
   end
-  
+
   File.open(tags_db, 'w'){ |io| io << plist.to_plist } if $conf['update_tags_db'] && !plist.nil?
   pb.store
 }
