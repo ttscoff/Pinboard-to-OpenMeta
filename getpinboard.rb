@@ -94,7 +94,7 @@ GAMEOVER
   exit
 end
 
-%w[ftools fileutils set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
+%w[fileutils set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
   require filename
 end
 
