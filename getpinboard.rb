@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 ##############################################################################
-### getpinboard.rb by Brett Terpstra, 2011 <http://brettterpstra.com>
+### getpinboard.rb by Brett Terpstra, 2014 <http://brettterpstra.com>
 ### Retrieves Pinboard.in bookmarks, saves as local .webloc files for
 ### Spotlight searching.
 ###
@@ -66,7 +66,8 @@ pdf_location: #{ENV['HOME']}/Dropbox/Sync/WebPDF
 # (absolute path) Location for PDF files, if pdf_tag option above is set and triggered
 #
 tag_method: #{default_tagger}
-# (integer) OpenMeta tagging method, 0 to disable, 1 for Tags.app, 2 for openmeta
+# (integer) OpenMeta tagging method, 0 to disable, 1 for Tags.app, 2 for openmeta,
+# 3 for jdberry's tag CLI (Mavericks)
 #
 always_tag: pinboard
 # (string) A tag to add to all saved bookmarks. set to '' for none
@@ -94,7 +95,7 @@ GAMEOVER
   exit
 end
 
-%w[fileutils set net/https zlib rexml/document time base64 cgi stringio yaml].each do |filename|
+%w[fileutils set net/https zlib rexml/document time base64 cgi stringio shellwords].each do |filename|
   require filename
 end
 
@@ -559,7 +560,7 @@ end
 class Utils
   # escape text for use in an AppleScript string
   def e_as(str)
-  	str.to_s.gsub(/(?=["\\])/, '\\')
+  	str.to_s.gsub(/(?=["\\])/, '\\').gsub(/\`/,'')
   end
   # use Growl to display messages
   # checks for existence of growlnotify
@@ -696,6 +697,7 @@ util = Utils.new
 
 pb.set_auth($conf['user'], $conf['password'])
 new_bookmarks = pb.new_bookmarks
+
 if ARGV[0] == '-r'
   if ARGV[1] =~ /^\d+$/
     util.reset_last_check(ARGV[1])
@@ -719,64 +721,76 @@ exit if new_bookmarks.count == 0 || !update
 counter = 0
 if $conf['update_tags_db']
   tags_db = File.join("#{ENV['HOME']}/Library/Application Support/Tags/Bookmarks.plist")
-  File.copy(tags_db,tags_db+'.bak')
+  FileUtils.cp(tags_db,tags_db+'.bak')
   plist = Plist::parse_xml(tags_db)
 end
 new_bookmarks.each {|bookmark|
   break if counter > 499 # cap the process at 500 bookmarks, resume later
   url = bookmark['href']
   title = bookmark['description']
-  cleantitle = title.gsub(/[^A-Za-z0-9 '"_\.\-]+/i, '-').gsub(/^\./,'').strip
+  cleantitle = title.gsub(/[^A-Za-z0-9 '"_\.\-]+/i, '-').gsub(/^\./,'').strip[0..50]
+
+# Debug crap
+  # FileUtils.rm($conf['target']+'/'+cleantitle+'.webloc') if File.exists?($conf['target']+'/'+cleantitle+'.webloc')
+
   unless File.exists?($conf['target']+'/'+cleantitle+'.webloc')
     comment = bookmark['extended'].strip
     tags = bookmark['tag'].split(' ')
     tags.push($conf['always_tag']) if $conf['always_tag'] && !$conf['always_tag'] != ''
     tags_app_tags = tags.join('","')
     om_tags = tags.join(' ')
+    mav_tags = tags.join(',')
     dateformat = "%m-%d-%Y %I:%M%p"
     dateformat = "%d-%m-%Y %I:%M%p" if $conf['dateformat'] && $conf['dateformat'] =~ /uk/i
     date = Time.parse(bookmark['time']).strftime(dateformat)
     util.debug_msg("Grabbing #{title}, tagging with \"#{tags_app_tags}\"",false)
     tagscommand = $conf['tag_method'] == 1 ? %Q{tell application "Tags" to apply tags {"#{tags_app_tags}"} to files} : "return"
     begin
-      bookmark['local_path'] = %x{osascript <<-APPLESCRIPT
-         tell application "Finder"
-          if not (exists alias (("#{$conf['target']}" & "#{util.e_as cleantitle}" as string) & ".webloc")) then
-            set webloc to make new internet location file at (POSIX file "#{$conf['target']}") to "#{util.e_as url}" with properties {name:"#{util.e_as cleantitle}",creation date:(AppleScript's date "#{date}"),comment:"#{util.e_as comment}"}
-            if #{$conf['tag_method']} > 0 then
-              if #{$conf['tag_method']} = 1 then
-                #{tagscommand} {POSIX path of (webloc as string)}
-              else if #{$conf['tag_method']} = 2 and exists (POSIX file "/usr/local/bin/openmeta") then
-                do shell script "/usr/local/bin/openmeta -p " & quoted form of (POSIX path of (webloc as string)) & " -a #{om_tags}"
-              end if
-            end if
-            if "#{$conf['create_thumbs']}" = "true" and exists (POSIX file "/usr/local/bin/setWeblocThumb") then
-              do shell script "/usr/local/bin/setWeblocThumb " & quoted form of (POSIX path of (webloc as string))
-            end if
-            if {"#{tags_app_tags}"} contains "#{$conf['pdf_tag']}" and "#{$conf['pdf_tag']}" is not "false" then
-            	tell application "Paparazzi!"
-            		launch hidden
-            		set minsize to {1024, 768}
-            		capture "#{url}" min size minsize
-            		repeat while busy
-            			-- To wait until the page is loaded.
-            		end repeat
-            		save as PDF in POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf"
-            		quit
-            	end tell
-            	if #{$conf['tag_method']} > 0 then
-                if #{$conf['tag_method']} = 1 then
-                  #{tagscommand} {(POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf")}
-                else if #{$conf['tag_method']} = 2 and exists (POSIX file "/usr/local/bin/openmeta") then
-                  do shell script "/usr/local/bin/openmeta -p '" & (POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf") & "' -a #{om_tags}"
-                end if
-              end if
-            end if
-            return POSIX path of (webloc as string)
+      osa_script =<<ENDOSASCRIPT
+osascript <<-APPLESCRIPT
+   tell application "Finder"
+    if not (exists alias (("#{$conf['target']}" & "#{util.e_as cleantitle}" as string) & ".webloc")) then
+      set webloc to make new internet location file at (POSIX file "#{$conf['target']}") to "#{util.e_as url}" with properties {name:"#{util.e_as cleantitle}",creation date:(AppleScript's date "#{date}"),comment:"#{util.e_as comment}"}
+      if #{$conf['tag_method']} > 0 then
+        if #{$conf['tag_method']} = 1 then
+          #{tagscommand} {POSIX path of (webloc as string)}
+        else if #{$conf['tag_method']} = 2 and exists (POSIX file "/usr/local/bin/openmeta") then
+          do shell script "/usr/local/bin/openmeta -p '" & POSIX path of (webloc as string) & "' -a #{om_tags}"
+        else if #{$conf['tag_method']} = 3 and exists (POSIX file "/usr/local/bin/tag") then
+          do shell script "/usr/local/bin/tag -a '#{mav_tags}' " & quoted form of (POSIX path of (webloc as string))
+        end if
+      end if
+      if "#{$conf['create_thumbs']}" = "true" and exists (POSIX file "/usr/local/bin/setWeblocThumb") then
+        do shell script "/usr/local/bin/setWeblocThumb " & quoted form of (POSIX path of (webloc as string))
+      end if
+      if {"#{tags_app_tags}"} contains "#{$conf['pdf_tag']}" and "#{$conf['pdf_tag']}" is not "false" then
+      	tell application "Paparazzi!"
+      		launch hidden
+      		set minsize to {1024, 768}
+      		capture "#{url}" min size minsize
+      		repeat while busy
+      			-- To wait until the page is loaded.
+      		end repeat
+      		save as PDF in POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf"
+      		quit
+      	end tell
+      	if #{$conf['tag_method']} > 0 then
+          if #{$conf['tag_method']} = 1 then
+            #{tagscommand} {(POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf")}
+          else if #{$conf['tag_method']} = 2 and exists (POSIX file "/usr/local/bin/openmeta") then
+            do shell script "/usr/local/bin/openmeta -p '" & (POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf") & "' -a #{om_tags}"
+          else if #{$conf['tag_method']} = 3 and exists (POSIX file "/usr/local/bin/tag") then
+            do shell script "/usr/local/bin/tag -a '#{mav_tags}' " & quoted form of (POSIX path of "#{$conf['pdf_location']}/#{util.e_as cleantitle}.pdf")
           end if
-         end tell
-         return POSIX path of (alias (("#{$conf['target']}" & "#{util.e_as cleantitle}" as string) & ".webloc"))
-    APPLESCRIPT }.strip
+        end if
+      end if
+      return POSIX path of (webloc as string)
+    end if
+   end tell
+   return POSIX path of (alias (("#{$conf['target']}/" & "#{util.e_as cleantitle}" as string) & ".webloc"))
+APPLESCRIPT
+ENDOSASCRIPT
+      bookmark['local_path'] = %x{#{osa_script}}.strip
       unless bookmark['local_path'] == '' || bookmark['local_path'] == 'AppleScript'
         pb.existing_bookmarks.push(bookmark)
         plist[url] = {"title"=>title, "tags"=>tags, "filename"=>cleantitle+'.webloc'} if $conf['update_tags_db'] && !plist.nil?
